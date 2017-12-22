@@ -1,11 +1,3 @@
-""" Convolutional Neural Network.
-Build and train a convolutional neural network with TensorFlow.
-This example is using the MNIST database of handwritten digits
-(http://yann.lecun.com/exdb/mnist/)
-Author: Aymeric Damien
-Project: https://github.com/aymericdamien/TensorFlow-Examples/
-"""
-
 from __future__ import division, print_function, absolute_import
 
 import sys
@@ -124,7 +116,7 @@ def model(x, weights, biases, dropout):
     fc2 = tf.nn.relu(fc2)  # Activation
 
     # Output, class prediction
-    out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
+    out = tf.add(tf.matmul(fc2, weights['out']), biases['out'])
     return out
 
 # Store layers weight & bias
