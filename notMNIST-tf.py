@@ -62,7 +62,7 @@ def accuracy(predictions, labels):
 
 # Training Parameters
 learning_rate = 0.001
-num_steps = 2001  # 200,000 per epoch
+num_steps = y_train.shape[0] + 1  # 200,000 per epoch
 batch_size = 128
 epochs = 3
 display_step = 250  # To print progress
@@ -195,10 +195,25 @@ with tf.Session(config=config, graph=graph) as session:
     for epoch in range(1, epochs+1):
         print('Beginning Epoch {0} -'.format(epoch))
 
+        def next_batch(num, data, labels):
+            """
+            Return a total of `num` random samples and labels. 
+            Mimicks the mnist.train.next_batch() function
+            """
+            idx = np.arange(0 , len(data))
+            np.random.shuffle(idx)
+            idx = idx[:num]
+            data_shuffle = [data[i] for i in idx]
+            labels_shuffle = [labels[i] for i in idx]
+
+            return np.asarray(data_shuffle), np.asarray(labels_shuffle)
+
+
         for step in range(num_steps):
-            offset = (step * batch_size) % (y_train.shape[0] - batch_size)
-            batch_data = X_train[offset:(offset + batch_size), :, :, :]
-            batch_labels = y_train[offset:(offset + batch_size), :]
+            batch_data, batch_labels = next_batch(batch_size, X_train, y_train)
+            # offset = (step * batch_size) % (y_train.shape[0] - batch_size)
+            # batch_data = X_train[offset:(offset + batch_size), :, :, :]
+            # batch_labels = y_train[offset:(offset + batch_size), :]
 
             feed_dict = {tf_X_train : batch_data, tf_y_train : batch_labels}
             _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
@@ -214,5 +229,4 @@ with tf.Session(config=config, graph=graph) as session:
 # To-Do:
 # Fix validation/test accuracy
 # Add model saving
-# Fix epoch functionality (add shuffling)
 # Add augmented data
