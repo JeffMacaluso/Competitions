@@ -5,6 +5,8 @@ import os
 import numpy as np
 import tensorflow as tf
 import pickle
+from datetime import datetime
+import time
 
 print('OS: ', sys.platform)
 print('Python: ', sys.version)
@@ -64,7 +66,7 @@ def accuracy(predictions, labels):
 learning_rate = 0.001
 num_steps = y_train.shape[0] + 1  # 200,000 per epoch
 batch_size = 128
-epochs = 3
+epochs = 20
 display_step = 250  # To print progress
 
 # Network Parameters
@@ -178,19 +180,21 @@ with graph.as_default():
 
     # Predictions for the training, validation, and test data.
     train_prediction = tf.nn.softmax(logits)
+    # valid_prediction = tf.nn.softmax(logits.eval(), tf_y_validation)
     # valid_prediction = tf.nn.softmax(model(tf_X_validation, weights, biases))
     # test_prediction = tf.nn.softmax(model(tf_X_test, weights, biases))
+
+
 
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
 
-print(y_train.shape[0])
-
 # Start training
 with tf.Session(config=config, graph=graph) as session:
     tf.global_variables_initializer().run()
     print('Initialized')
+    start_time = time.time()
 
     for epoch in range(1, epochs+1):
         print('Beginning Epoch {0} -'.format(epoch))
@@ -219,12 +223,19 @@ with tf.Session(config=config, graph=graph) as session:
             _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
 
             if (step % 250 == 0) or (step == num_steps):
-                print('Epoch %d Step %d (%.4f%%) - ' % (epoch, step, (step/float(y_train.shape[0]))))
+                print('Epoch %d Step %d (%.4f%%)' % (epoch, step, (step/float(y_train.shape[0]))))
+                print('------------------------------------')
                 print('Minibatch loss: %f' % l)
                 print('Minibatch accuracy: %.1f%%' % accuracy(predictions, batch_labels))
                 # print('Validation accuracy: %.1f%%' % accuracy(valid_prediction.eval(), y_validation))
                 # print('Test accuracy: %.1f%%' % accuracy(test_prediction.eval(), y_test))
+                print(datetime.now())
+                print('Total execution time: %.2f minutes' % ((time.time() - start_time)/60.))
                 print()
+    
+    # Saver object
+    saver = tf.train.Saver()
+    saver.save(session, dir_path+'\\'+'tfTestModel')
 
 # To-Do:
 # Fix validation/test accuracy
