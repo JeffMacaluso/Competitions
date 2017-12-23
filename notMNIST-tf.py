@@ -215,3 +215,4 @@ with tf.Session(config=config, graph=graph) as session:
 # Fix validation/test accuracy
 # Add model saving
 # Fix epoch functionality (add shuffling)
+# Add augmented data
