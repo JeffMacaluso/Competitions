@@ -16,6 +16,12 @@ from tensorflow.python.client import device_lib
 local_device_protos = device_lib.list_local_devices()
 print([x for x in local_device_protos if x.device_type == 'GPU'])
 
+# GPU memory management settings
+config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = 0.2
+
+# Importing the data
 dir_path = os.path.dirname(os.path.realpath(__file__))
 pickle_file = 'notMNIST.pickle'
 
@@ -28,170 +34,184 @@ with open(dir_path+'\\'+pickle_file, 'rb') as f:
     X_test = save['test_dataset']
     y_test = save['test_labels']
     del save  # hint to help gc free up memory
+    print('\nNative data shapes:')
     print('Training set', X_train.shape, y_train.shape)
     print('Validation set', X_validation.shape, y_validation.shape)
-    print('Test set', X_test.shape, y_test.shape)
+    print('Test set', X_test.shape, y_test.shape, '\n')
 
 image_size = 28
 num_labels = 10
 num_channels = 1  # grayscale
 
-# Import MNIST data
-from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
+def reformat(dataset, labels):
+    dataset = dataset.reshape((-1, image_size, image_size, num_channels)).astype(np.float32)
+    labels = (np.arange(num_labels) == labels[:,None]).astype(np.float32)
+    return dataset, labels
+
+X_train, y_train = reformat(X_train, y_train)
+X_validation, y_validation = reformat(X_validation, y_validation)
+X_test, y_test = reformat(X_test, y_test)
+
+print('Reformatted data shapes:')
+print('Training set', X_train.shape, y_train.shape)
+print('Validation set', X_validation.shape, y_validation.shape)
+print('Test set', X_test.shape, y_test.shape, '\n')
+
+def accuracy(predictions, labels):
+    return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1)) / predictions.shape[0])
 
 # Training Parameters
 learning_rate = 0.001
-num_steps = 1001
+num_steps = 2001  # 200,000 per epoch
 batch_size = 128
-display_step = 500
+epochs = 3
+display_step = 250  # To print progress
 
 # Network Parameters
-num_input = 784 # MNIST data input (img shape: 28*28)
-num_classes = 10 # MNIST total classes (0-9 digits)
-dropout = 0.75 # Dropout, probability to keep units
+num_input = 784  # Data input (image shape: 28x28)
+num_classes = 10  # Total classes (10 characters)
 
-# tf Graph input
-X = tf.placeholder(tf.float32, [None, num_input])
-Y = tf.placeholder(tf.float32, [None, num_classes])
-keep_prob = tf.placeholder(tf.float32) # dropout (keep probability)
+graph = tf.Graph()
 
+with graph.as_default():
+    # Input data
+    tf_X_train = tf.placeholder(tf.float32, shape=(batch_size, image_size, image_size, num_channels))
+    tf_y_train = tf.placeholder(tf.float32, shape=(batch_size, num_labels))
+    tf_X_validation = tf.constant(X_validation)
+    tf_X_test = tf.constant(X_test)
 
-# Create some wrappers for simplicity
-def conv2d(x, W, b, strides=1):
-    # Conv2D wrapper, with bias and relu activation
-    x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
-    x = tf.nn.bias_add(x, b)
-    return tf.nn.relu(x)
+    # Create some wrappers for simplicity
+    def maxpool2d(x, k=2):
+        """
+        Max Pooling wrapper
+        """
+        return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
 
+    def batch_norm(x):
+        """
+        Batch Normalization wrapper
+        """
+        return tf.contrib.layers.batch_norm(x, center=True, scale=True, fused=True,)
 
-def maxpool2d(x, k=2):
-    # MaxPool2D wrapper
-    return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],
-                          padding='SAME')
+    def conv2d(data, outputs=32, kernel_size=(5, 5), stride=1, regularization=0.00005):
+        """
+        Conv2D wrapper, with bias and relu activation
+        """
+        layer = tf.contrib.layers.conv2d(inputs=data, 
+                                         num_outputs=outputs,
+                                         kernel_size=kernel_size,
+                                         stride=stride,
+                                         padding='SAME',
+                                         weights_regularizer=tf.contrib.layers.l2_regularizer(scale=regularization),
+                                         biases_regularizer=tf.contrib.layers.l2_regularizer(scale=regularization))
+        return layer
 
-def batch_norm(x):
-    """
-    Convenience function for batch normalization
-    """
-    return tf.contrib.layers.batch_norm(x, center=True, scale=True, fused=True,)
+    # Conv(5,5) -> Conv(5,5) -> MaxPooling -> Conv(3,3) -> Conv(3,3) -> MaxPooling -> FC1024 -> FC1024 -> SoftMax
+    def model(x):
+        # notMNIST data input is a 1-D vector of 784 features (28*28 pixels)
+        # Reshape to match picture format [Height x Width x Channel]
+        # Tensor input become 4-D: [Batch Size, Height, Width, Channel]
+        # x = tf.reshape(x, shape=[-1, 28, 28, 1])
 
+        # Conv(5, 5)
+        conv1 = conv2d(x)
+        bnorm1 = batch_norm(conv1)
 
-# Conv(5,5) -> Conv(5,5) -> MaxPooling -> Conv(3,3) -> Conv(3,3) -> MaxPooling -> FC1024 -> FC1024 -> SoftMax
-def model(x, weights, biases, dropout):
-    # MNIST data input is a 1-D vector of 784 features (28*28 pixels)
-    # Reshape to match picture format [Height x Width x Channel]
-    # Tensor input become 4-D: [Batch Size, Height, Width, Channel]
-    x = tf.reshape(x, shape=[-1, 28, 28, 1])
+        # Conv(5, 5) -> Max Pooling
+        # conv2 = conv2d(bnorm1, weights['wc2'], biases['bc2'])
+        conv2 = conv2d(bnorm1, outputs=64)
+        bnorm2 = batch_norm(conv2)
+        pool1 = maxpool2d(bnorm2, k=2)  # 14x14
+        drop1 = tf.nn.dropout(pool1, keep_prob=0.5)
 
-    # Conv(5, 5)
-    conv1 = conv2d(x, weights['wc1'], biases['bc1'])
-    bnorm1 = batch_norm(conv1)
+        # Conv(3, 3)
+        # conv3 = conv2d(drop1, weights['wc3'], biases['bc3'])
+        conv3 = conv2d(drop1, outputs=64, kernel_size=(3, 3))
+        bnorm3 = batch_norm(conv3)
 
-    # Conv(5, 5) -> Max Pooling
-    conv2 = conv2d(bnorm1, weights['wc2'], biases['bc2'])
-    bnorm2 = batch_norm(conv2)
-    pool1 = maxpool2d(bnorm2, k=2)  # 14x14
-    drop1 = tf.nn.dropout(pool1, keep_prob=0.5)
+        # Conv(3, 3) -> Max Pooling
+        # conv4 = conv2d(bnorm3, weights['wc4'], biases['bc4'])
+        conv4 = conv2d(bnorm3, outputs=64, kernel_size=(3, 3))
+        bnorm4 = batch_norm(conv4)
+        pool2 = maxpool2d(bnorm4, k=2)  # 7x7
+        drop2 = tf.nn.dropout(pool2, keep_prob=0.5)
 
-    # Conv(3, 3)
-    conv3 = conv2d(drop1, weights['wc3'], biases['bc3'])
-    bnorm3 = batch_norm(conv3)
+        # FC1024
+        # Reshape conv2 output to fit fully connected layer input
+        # fc1 = tf.reshape(drop2, [-1, weights['wd1'].get_shape().as_list()[0]])
+        flatten = tf.contrib.layers.flatten(drop2)
+        fc1 = tf.contrib.layers.fully_connected(
+            flatten,
+            1024,
+            weights_regularizer=tf.contrib.layers.l2_regularizer(scale=0.00005),
+            biases_regularizer=tf.contrib.layers.l2_regularizer(scale=0.00005),
+        )
+        drop3 = tf.nn.dropout(fc1, keep_prob=0.5)
 
-    # Conv(3, 3) -> Max Pooling
-    conv4 = conv2d(bnorm3, weights['wc4'], biases['bc4'])
-    bnorm4 = batch_norm(conv4)
-    pool2 = maxpool2d(bnorm4, k=2)  # 7x7
-    drop2 = tf.nn.dropout(pool2, keep_prob=0.5)
+        # FC1024
+        fc2 = tf.contrib.layers.fully_connected(
+            fc1,
+            1024,
+            weights_regularizer=tf.contrib.layers.l2_regularizer(scale=0.00005),
+            biases_regularizer=tf.contrib.layers.l2_regularizer(scale=0.00005),
+        )
 
-    # FC1024
-    # Reshape conv2 output to fit fully connected layer input
-    fc1 = tf.reshape(drop2, [-1, weights['wd1'].get_shape().as_list()[0]])
-    fc1 = tf.add(tf.matmul(fc1, weights['wd1']), biases['bd1'])
-    fc1 = tf.nn.relu(fc1)  # Activation
-    fc1 = tf.nn.dropout(fc1, dropout)  # Dropout
+        # Output, class prediction
+        # out = tf.add(tf.matmul(fc2, weights['out']), biases['out'])
+        out = tf.contrib.layers.fully_connected(
+            fc2,
+            10,
+            activation_fn=None,
+            weights_regularizer=tf.contrib.layers.l2_regularizer(scale=0.00005),
+            biases_regularizer=tf.contrib.layers.l2_regularizer(scale=0.00005),
+        )
+        return out
 
-    # FC1024
-    fc2 = tf.add(tf.matmul(fc1, weights['wd2']), biases['bd2'])
-    fc2 = tf.nn.relu(fc2)  # Activation
+    # Construct model
+    logits = model(tf_X_train)
+    
+    prediction = tf.nn.softmax(logits)
 
-    # Output, class prediction
-    out = tf.add(tf.matmul(fc2, weights['out']), biases['out'])
-    return out
+    # Define loss and optimizer
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_y_train, logits=logits))
+    optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
 
-# Store layers weight & bias
-weights = {
-    # 5x5 conv, 1 input, 32 outputs
-    'wc1': tf.Variable(tf.random_normal([5, 5, 1, 32])),
-    # 5x5 conv, 32 inputs, 64 outputs
-    'wc2': tf.Variable(tf.random_normal([5, 5, 32, 64])),
-    # 3x3 conv, 64 inputs, 64 outputs
-    'wc3': tf.Variable(tf.random_normal([3, 3, 64, 64])),
-    # 3x3 conv, 64 inputs, 64 outputs
-    'wc4': tf.Variable(tf.random_normal([3, 3, 64, 64])),
-    # fully connected, 7*7*64 inputs, 1024 outputs
-    'wd1': tf.Variable(tf.random_normal([7*7*64, 1024])),
-    # fully connected, 1024, 1024 outputs
-    'wd2': tf.Variable(tf.random_normal([1024, 1024])),
-    # 1024 inputs, 10 outputs (class prediction)
-    'out': tf.Variable(tf.random_normal([1024, num_classes]))
-}
+    # Predictions for the training, validation, and test data.
+    train_prediction = tf.nn.softmax(logits)
+    # valid_prediction = tf.nn.softmax(model(tf_X_validation, weights, biases))
+    # test_prediction = tf.nn.softmax(model(tf_X_test, weights, biases))
 
-biases = {
-    'bc1': tf.Variable(tf.random_normal([32])),
-    'bc2': tf.Variable(tf.random_normal([64])),
-    'bc3': tf.Variable(tf.random_normal([64])),
-    'bc4': tf.Variable(tf.random_normal([64])),
-    'bd1': tf.Variable(tf.random_normal([1024])),
-    'bd2': tf.Variable(tf.random_normal([1024])),
-    'out': tf.Variable(tf.random_normal([num_classes]))
-}
-
-# Construct model
-logits = model(X, weights, biases, keep_prob)
-prediction = tf.nn.softmax(logits)
-
-# Define loss and optimizer
-loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-    logits=logits, labels=Y))
-optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-train_op = optimizer.minimize(loss_op)
-
-
-# Evaluate model
-correct_pred = tf.equal(tf.argmax(prediction, 1), tf.argmax(Y, 1))
-accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
 
-config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
-config.gpu_options.per_process_gpu_memory_fraction = 0.2
+print(y_train.shape[0])
 
 # Start training
-with tf.Session(config=config) as sess:
+with tf.Session(config=config, graph=graph) as session:
+    tf.global_variables_initializer().run()
+    print('Initialized')
 
-    # Run the initializer
-    sess.run(init)
+    for epoch in range(1, epochs+1):
+        print('Beginning Epoch {0} -'.format(epoch))
 
-    for step in range(1, num_steps+1):
-        batch_x, batch_y = mnist.train.next_batch(batch_size)
-        # Run optimization op (backprop)
-        sess.run(train_op, feed_dict={X: batch_x, Y: batch_y, keep_prob: 0.8})
-        if step % display_step == 0 or step == 1:
-            # Calculate batch loss and accuracy
-            loss, acc = sess.run([loss_op, accuracy], feed_dict={X: batch_x,
-                                                                 Y: batch_y,
-                                                                 keep_prob: 1.0})
-            print("Step " + str(step) + ", Minibatch Loss= " + \
-                  "{:.4f}".format(loss) + ", Training Accuracy= " + \
-                  "{:.3f}".format(acc))
+        for step in range(num_steps):
+            offset = (step * batch_size) % (y_train.shape[0] - batch_size)
+            batch_data = X_train[offset:(offset + batch_size), :, :, :]
+            batch_labels = y_train[offset:(offset + batch_size), :]
 
-    print("Optimization Finished!")
+            feed_dict = {tf_X_train : batch_data, tf_y_train : batch_labels}
+            _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
 
-    # Calculate accuracy for 256 MNIST test images
-    print("Testing Accuracy:", \
-        sess.run(accuracy, feed_dict={X: mnist.test.images[:256],
-                                      Y: mnist.test.labels[:256],
-                                      keep_prob: 1.0}))
+            if (step % 250 == 0) or (step == num_steps):
+                print('Epoch %d Step %d (%.4f%%) - ' % (epoch, step, (step/float(y_train.shape[0]))))
+                print('Minibatch loss: %f' % l)
+                print('Minibatch accuracy: %.1f%%' % accuracy(predictions, batch_labels))
+                # print('Validation accuracy: %.1f%%' % accuracy(valid_prediction.eval(), y_validation))
+                # print('Test accuracy: %.1f%%' % accuracy(test_prediction.eval(), y_test))
+                print()
+
+# To-Do:
+# Fix validation/test accuracy
+# Add model saving
+# Fix epoch functionality (add shuffling)
