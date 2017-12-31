@@ -66,7 +66,7 @@ def accuracy(predictions, labels):
 learning_rate = 0.001
 num_steps = y_train.shape[0] + 1  # 200,000 per epoch
 batch_size = 128
-epochs = 20
+epochs = 3
 display_step = 250  # To print progress
 
 # Network Parameters
@@ -223,7 +223,7 @@ with tf.Session(config=config, graph=graph) as session:
             _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
 
             if (step % 250 == 0) or (step == num_steps):
-                print('Epoch %d Step %d (%.4f%%)' % (epoch, step, (step/float(y_train.shape[0]))))
+                print('Epoch %d Step %d (%.2f%%)' % (epoch, step, ((step/float(num_steps)*100))))
                 print('------------------------------------')
                 print('Minibatch loss: %f' % l)
                 print('Minibatch accuracy: %.1f%%' % accuracy(predictions, batch_labels))
