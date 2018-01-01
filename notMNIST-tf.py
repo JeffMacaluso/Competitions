@@ -64,7 +64,8 @@ def accuracy(predictions, labels):
 
 # Training Parameters
 learning_rate = 0.001
-num_steps = y_train.shape[0] + 1  # 200,000 per epoch
+# num_steps = y_train.shape[0] + 1  # 200,000 per epoch
+num_steps = 1000
 batch_size = 128
 epochs = 3
 display_step = 250  # To print progress
@@ -194,7 +195,10 @@ init = tf.global_variables_initializer()
 with tf.Session(config=config, graph=graph) as session:
     tf.global_variables_initializer().run()
     print('Initialized')
+
+    # For tracking execution time and progress
     start_time = time.time()
+    total_steps = 0
 
     for epoch in range(1, epochs+1):
         print('Beginning Epoch {0} -'.format(epoch))
@@ -223,7 +227,13 @@ with tf.Session(config=config, graph=graph) as session:
             _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
 
             if (step % 250 == 0) or (step == num_steps):
-                print('Epoch %d Step %d (%.2f%%)' % (epoch, step, ((step/float(num_steps)*100))))
+                # Calculating percentage of completion
+                total_steps += step
+                pct_epoch = (step / float(num_steps)) * 100
+                pct_total = (total_steps / float(num_steps * (epochs+1))) * 100  # Fix this line
+
+                # Printing progress
+                print('Epoch %d Step %d (%.2f%% epoch, %.2f%% total)' % (epoch, step, pct_epoch, pct_total))
                 print('------------------------------------')
                 print('Minibatch loss: %f' % l)
                 print('Minibatch accuracy: %.1f%%' % accuracy(predictions, batch_labels))
