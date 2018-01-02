@@ -247,9 +247,11 @@ with tf.Session(config=config, graph=graph) as session:
                 print('Total execution time: %.2f minutes' % ((time.time() - start_time)/60.))
                 print()
     
-    # Saver object
+    # Saver object - saves model as 'tfTestModel_20epochs_Y-M-D_H-M-S'
     saver = tf.train.Saver()
-    saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+epochs+' epochs_'+datetime.now())
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epochs)+'epochs_'+str(current_time))
+
 
 # To-Do:
 # Fix validation/test accuracy
