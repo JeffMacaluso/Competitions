@@ -1,3 +1,7 @@
+"""
+Rules document: https://docs.google.com/document/d/1AkHWrJebwI6DQIyc7OSOY7KZiUPnUmK45qTpOI7RI2A/edit
+"""
+
 from __future__ import division, print_function, absolute_import
 
 import sys
@@ -65,9 +69,9 @@ def accuracy(predictions, labels):
 # Training Parameters
 learning_rate = 0.001
 # num_steps = y_train.shape[0] + 1  # 200,000 per epoch
-num_steps = 1000
+num_steps = 501
 batch_size = 128
-epochs = 3
+epochs = 2
 display_step = 250  # To print progress
 
 # Network Parameters
@@ -245,7 +249,7 @@ with tf.Session(config=config, graph=graph) as session:
     
     # Saver object
     saver = tf.train.Saver()
-    saver.save(session, dir_path+'\\'+'tfTestModel')
+    saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+epochs+' epochs_'+datetime.now())
 
 # To-Do:
 # Fix validation/test accuracy
