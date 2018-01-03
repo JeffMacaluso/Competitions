@@ -63,6 +63,69 @@ print('Training set', X_train.shape, y_train.shape)
 print('Validation set', X_validation.shape, y_validation.shape)
 print('Test set', X_test.shape, y_test.shape, '\n')
 
+
+# Augment training data
+def augment_training_data(images, labels):
+    """
+    Generates
+
+    Creates an additional 300,000 
+    
+    Takes ~1.25 minutes with an i7/16gb machine
+    """
+
+    # Empty lists to fill
+    expanded_images = []
+    expanded_labels = []
+
+    # Looping through
+    j = 0   # counter
+    for x, y in zip(images, labels):
+        j = j + 1
+        if j % 10000 == 0:
+            print('Expanding data: %03d / %03d' % (j, np.size(images, 0)))
+
+        # register original data
+        expanded_images.append(x)
+        expanded_labels.append(y)
+
+        # get a value for the background
+        # zero is the expected value, but median() is used to estimate background's value
+        bg_value = np.median(x)  # this is regarded as background's value
+        image = np.reshape(x, (-1, 28))
+
+        for i in range(4):
+            # rotate the image with random degree
+            angle = np.random.randint(-15, 15, 1)
+            new_img = ndimage.rotate(
+                image, angle, reshape=False, cval=bg_value)
+
+            # shift the image with random distance
+            shift = np.random.randint(-2, 2, 2)
+            new_img_ = ndimage.shift(new_img, shift, cval=bg_value)
+
+            # register new training data
+            expanded_images.append(np.reshape(new_img_, (28, 28, 1)))
+            expanded_labels.append(y)
+
+    return expanded_images, expanded_labels
+
+
+print('Starting')
+augmented = augment_training_data(X_train, y_train)
+print('Completed')
+
+# Appending to the end of the current X/y train
+X_train_aug = np.append(X_train, augmented[0], axis=0)
+y_train_aug = np.append(y_train, augmented[1])
+
+print('X_train shape:', X_train_aug.shape)
+print('y_train shape:', y_train_aug.shape)
+print(X_train_aug.shape[0], 'Train samples')
+print(X_validation.shape[0], 'Validation samples')
+print(X_test.shape[0], 'Test samples')
+
+
 def accuracy(predictions, labels):
     return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1)) / predictions.shape[0])
 
@@ -71,7 +134,7 @@ learning_rate = 0.001
 # num_steps = y_train.shape[0] + 1  # 200,000 per epoch
 num_steps = 501
 batch_size = 128
-epochs = 2
+epochs = 1
 display_step = 250  # To print progress
 
 # Network Parameters
@@ -185,10 +248,10 @@ with graph.as_default():
 
     # Predictions for the training, validation, and test data.
     train_prediction = tf.nn.softmax(logits)
+    validation_prediction = tf.nn.softmax(model(tf_X_validation))
     # valid_prediction = tf.nn.softmax(logits.eval(), tf_y_validation)
     # valid_prediction = tf.nn.softmax(model(tf_X_validation, weights, biases))
     # test_prediction = tf.nn.softmax(model(tf_X_test, weights, biases))
-
 
 
 
@@ -222,36 +285,50 @@ with tf.Session(config=config, graph=graph) as session:
 
 
         for step in range(num_steps):
-            batch_data, batch_labels = next_batch(batch_size, X_train, y_train)
+            batch_data, batch_labels = next_batch(batch_size, X_train_aug, y_train_aug)
             # offset = (step * batch_size) % (y_train.shape[0] - batch_size)
             # batch_data = X_train[offset:(offset + batch_size), :, :, :]
             # batch_labels = y_train[offset:(offset + batch_size), :]
 
-            feed_dict = {tf_X_train : batch_data, tf_y_train : batch_labels}
+            feed_dict = {tf_X_train: batch_data, tf_y_train: batch_labels}
             _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
+            
+            validation_predictions = session.run(validation_prediction, feed_dict=X_validation)
 
             if (step % 250 == 0) or (step == num_steps):
                 # Calculating percentage of completion
                 total_steps += step
                 pct_epoch = (step / float(num_steps)) * 100
-                pct_total = (total_steps / float(num_steps * (epochs+1))) * 100  # Fix this line
+                pct_total = (total_steps / float(num_steps * (epochs+1))) * 100  # Fix this liney_conv
+
+                # Calculating the validation accuracy
+                # validation_prediction = tf.run(model, {x: [X_validation]})
+                # validation_accuracy = accuracy(validation_prediction)
 
                 # Printing progress
                 print('Epoch %d Step %d (%.2f%% epoch, %.2f%% total)' % (epoch, step, pct_epoch, pct_total))
                 print('------------------------------------')
                 print('Minibatch loss: %f' % l)
                 print('Minibatch accuracy: %.1f%%' % accuracy(predictions, batch_labels))
+                print('Validation accuracy: %.1f%%' % accuracy(validation_prediction, y_validation))
                 # print('Validation accuracy: %.1f%%' % accuracy(valid_prediction.eval(), y_validation))
                 # print('Test accuracy: %.1f%%' % accuracy(test_prediction.eval(), y_test))
                 print(datetime.now())
                 print('Total execution time: %.2f minutes' % ((time.time() - start_time)/60.))
                 print()
     
+    # Printing the test accuracy
+    # correct_prediction = tf.equal(tf.argmax(y, 1), y_)
+    # test_accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    # print(sess.run(test_accuracy, feed_dict={x: X_test,
+    #                                     y_: y_test}))
+
+
+
     # Saver object - saves model as 'tfTestModel_20epochs_Y-M-D_H-M-S'
     saver = tf.train.Saver()
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epochs)+'epochs_'+str(current_time))
-
 
 # To-Do:
 # Fix validation/test accuracy
