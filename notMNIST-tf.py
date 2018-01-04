@@ -67,12 +67,13 @@ print('Test set', X_test.shape, y_test.shape, '\n')
 # Augment training data
 def augment_training_data(images, labels):
     """
-    Generates
+    Generates augmented training data by rotating and shifting images
 
-    Creates an additional 300,000 
+    Creates an additional 300,000 training samples
     
     Takes ~1.25 minutes with an i7/16gb machine
     """
+    from scipy import ndimage
 
     # Empty lists to fill
     expanded_images = []
