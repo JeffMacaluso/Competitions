@@ -247,13 +247,8 @@ with graph.as_default():
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_y_train, logits=logits))
     optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
 
-    # Predictions for the training, validation, and test data.
+    # Predictions for the training data
     train_prediction = tf.nn.softmax(logits)
-    validation_prediction = tf.nn.softmax(model(tf_X_validation))
-    # valid_prediction = tf.nn.softmax(logits.eval(), tf_y_validation)
-    # valid_prediction = tf.nn.softmax(model(tf_X_validation, weights, biases))
-    # test_prediction = tf.nn.softmax(model(tf_X_test, weights, biases))
-
 
 
 # Initialize the variables (i.e. assign their default value)
@@ -287,24 +282,15 @@ with tf.Session(config=config, graph=graph) as session:
 
         for step in range(num_steps):
             batch_data, batch_labels = next_batch(batch_size, X_train_aug, y_train_aug)
-            # offset = (step * batch_size) % (y_train.shape[0] - batch_size)
-            # batch_data = X_train[offset:(offset + batch_size), :, :, :]
-            # batch_labels = y_train[offset:(offset + batch_size), :]
 
             feed_dict = {tf_X_train: batch_data, tf_y_train: batch_labels}
             _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
-            
-            validation_predictions = session.run(validation_prediction, feed_dict=X_validation)
 
             if (step % 250 == 0) or (step == num_steps):
                 # Calculating percentage of completion
                 total_steps += step
                 pct_epoch = (step / float(num_steps)) * 100
                 pct_total = (total_steps / float(num_steps * (epochs+1))) * 100  # Fix this liney_conv
-
-                # Calculating the validation accuracy
-                # validation_prediction = tf.run(model, {x: [X_validation]})
-                # validation_accuracy = accuracy(validation_prediction)
 
                 # Printing progress
                 print('Epoch %d Step %d (%.2f%% epoch, %.2f%% total)' % (epoch, step, pct_epoch, pct_total))
@@ -317,14 +303,6 @@ with tf.Session(config=config, graph=graph) as session:
                 print(datetime.now())
                 print('Total execution time: %.2f minutes' % ((time.time() - start_time)/60.))
                 print()
-    
-    # Printing the test accuracy
-    # correct_prediction = tf.equal(tf.argmax(y, 1), y_)
-    # test_accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    # print(sess.run(test_accuracy, feed_dict={x: X_test,
-    #                                     y_: y_test}))
-
-
 
     # Saver object - saves model as 'tfTestModel_20epochs_Y-M-D_H-M-S'
     saver = tf.train.Saver()
