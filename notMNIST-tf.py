@@ -118,7 +118,7 @@ print('Completed')
 
 # Appending to the end of the current X/y train
 X_train_aug = np.append(X_train, augmented[0], axis=0)
-y_train_aug = np.append(y_train, augmented[1])
+y_train_aug = np.append(y_train, augmented[1], axis=0)
 
 print('X_train shape:', X_train_aug.shape)
 print('y_train shape:', y_train_aug.shape)
@@ -132,10 +132,9 @@ def accuracy(predictions, labels):
 
 # Training Parameters
 learning_rate = 0.001
-# num_steps = y_train.shape[0] + 1  # 200,000 per epoch
-num_steps = 501
+num_steps = y_train.shape[0] + 1  # 200,000 per epoch
 batch_size = 128
-epochs = 1
+epochs = 100
 display_step = 250  # To print progress
 
 # Network Parameters
@@ -303,13 +302,20 @@ with tf.Session(config=config, graph=graph) as session:
                 print(datetime.now())
                 print('Total execution time: %.2f minutes' % ((time.time() - start_time)/60.))
                 print()
+        
+        # Save the model every 5th epoch
+        if epoch % 5 == 0:
+            # Saver object - saves model as 'tfTestModel_20epochs_Y-M-D_H-M-S'
+            saver = tf.train.Saver()
+            current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epochs)+'epochs_'+str(current_time))
+            print('Saving model at current stage')
 
     # Saver object - saves model as 'tfTestModel_20epochs_Y-M-D_H-M-S'
     saver = tf.train.Saver()
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epochs)+'epochs_'+str(current_time))
+    print('Complete')
 
 # To-Do:
 # Fix validation/test accuracy
-# Add model saving
-# Add augmented data
