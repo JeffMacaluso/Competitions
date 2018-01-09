@@ -289,7 +289,7 @@ with tf.Session(config=config, graph=graph) as session:
                 # Calculating percentage of completion
                 total_steps += step
                 pct_epoch = (step / float(num_steps)) * 100
-                pct_total = (total_steps / float(num_steps * (epochs+1))) * 100  # Fix this liney_conv
+                pct_total = (total_steps / float(num_steps * (epochs+1))) * 100  # Fix this line
 
                 # Printing progress
                 print('Epoch %d Step %d (%.2f%% epoch, %.2f%% total)' % (epoch, step, pct_epoch, pct_total))
@@ -308,13 +308,13 @@ with tf.Session(config=config, graph=graph) as session:
             # Saver object - saves model as 'tfTestModel_20epochs_Y-M-D_H-M-S'
             saver = tf.train.Saver()
             current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epochs)+'epochs_'+str(current_time))
+            saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epoch)+'epochs_'+str(current_time))
             print('Saving model at current stage')
 
     # Saver object - saves model as 'tfTestModel_20epochs_Y-M-D_H-M-S'
     saver = tf.train.Saver()
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epochs)+'epochs_'+str(current_time))
+    saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epoch)+'epochs_'+str(current_time))
     print('Complete')
 
 # To-Do:
