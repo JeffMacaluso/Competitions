@@ -246,9 +246,6 @@ with graph.as_default():
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_y_train, logits=logits))
     optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
 
-    # Predictions for the training data
-    train_prediction = tf.nn.softmax(logits)
-
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -316,6 +313,3 @@ with tf.Session(config=config, graph=graph) as session:
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epoch)+'epochs_'+str(current_time))
     print('Complete')
-
-# To-Do:
-# Fix validation/test accuracy
