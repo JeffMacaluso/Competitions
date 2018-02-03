@@ -17,7 +17,7 @@ print('Python: ', sys.version)
 print('NumPy: ', np.__version__)
 print('TensorFlow: ', tf.__version__)
 
-# Checking tensorflow processing devices
+# Checking TensorFlow processing devices
 from tensorflow.python.client import device_lib
 local_device_protos = device_lib.list_local_devices()
 print([x for x in local_device_protos if x.device_type == 'GPU'])
@@ -49,6 +49,7 @@ image_size = 28
 num_labels = 10
 num_channels = 1  # grayscale
 
+# Reformatting to unflattened images
 def reformat(dataset, labels):
     dataset = dataset.reshape((-1, image_size, image_size, num_channels)).astype(np.float32)
     labels = (np.arange(num_labels) == labels[:,None]).astype(np.float32)
@@ -79,7 +80,7 @@ def augment_training_data(images, labels):
     expanded_images = []
     expanded_labels = []
 
-    # Looping through
+    # Looping through samples, modifying them, and appending them to the empty lists
     j = 0   # counter
     for x, y in zip(images, labels):
         j = j + 1
@@ -178,29 +179,21 @@ with graph.as_default():
 
     # Conv(5,5) -> Conv(5,5) -> MaxPooling -> Conv(3,3) -> Conv(3,3) -> MaxPooling -> FC1024 -> FC1024 -> SoftMax
     def model(x):
-        # notMNIST data input is a 1-D vector of 784 features (28*28 pixels)
-        # Reshape to match picture format [Height x Width x Channel]
-        # Tensor input become 4-D: [Batch Size, Height, Width, Channel]
-        # x = tf.reshape(x, shape=[-1, 28, 28, 1])
-
         # Conv(5, 5)
         conv1 = conv2d(x)
         bnorm1 = batch_norm(conv1)
 
         # Conv(5, 5) -> Max Pooling
-        # conv2 = conv2d(bnorm1, weights['wc2'], biases['bc2'])
         conv2 = conv2d(bnorm1, outputs=64)
         bnorm2 = batch_norm(conv2)
         pool1 = maxpool2d(bnorm2, k=2)  # 14x14
         drop1 = tf.nn.dropout(pool1, keep_prob=0.5)
 
         # Conv(3, 3)
-        # conv3 = conv2d(drop1, weights['wc3'], biases['bc3'])
         conv3 = conv2d(drop1, outputs=64, kernel_size=(3, 3))
         bnorm3 = batch_norm(conv3)
 
         # Conv(3, 3) -> Max Pooling
-        # conv4 = conv2d(bnorm3, weights['wc4'], biases['bc4'])
         conv4 = conv2d(bnorm3, outputs=64, kernel_size=(3, 3))
         bnorm4 = batch_norm(conv4)
         pool2 = maxpool2d(bnorm4, k=2)  # 7x7
@@ -208,7 +201,6 @@ with graph.as_default():
 
         # FC1024
         # Reshape conv2 output to fit fully connected layer input
-        # fc1 = tf.reshape(drop2, [-1, weights['wd1'].get_shape().as_list()[0]])
         flatten = tf.contrib.layers.flatten(drop2)
         fc1 = tf.contrib.layers.fully_connected(
             flatten,
@@ -227,7 +219,6 @@ with graph.as_default():
         )
 
         # Output, class prediction
-        # out = tf.add(tf.matmul(fc2, weights['out']), biases['out'])
         out = tf.contrib.layers.fully_connected(
             fc2,
             10,
@@ -245,9 +236,6 @@ with graph.as_default():
     # Define loss and optimizer
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_y_train, logits=logits))
     optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
-
-    # Predictions for the training data
-    train_prediction = tf.nn.softmax(logits)
 
 
 # Initialize the variables (i.e. assign their default value)
@@ -296,9 +284,6 @@ with tf.Session(config=config, graph=graph) as session:
                 print('------------------------------------')
                 print('Minibatch loss: %f' % l)
                 print('Minibatch accuracy: %.1f%%' % accuracy(predictions, batch_labels))
-                print('Validation accuracy: %.1f%%' % accuracy(validation_prediction, y_validation))
-                # print('Validation accuracy: %.1f%%' % accuracy(valid_prediction.eval(), y_validation))
-                # print('Test accuracy: %.1f%%' % accuracy(test_prediction.eval(), y_test))
                 print(datetime.now())
                 print('Total execution time: %.2f minutes' % ((time.time() - start_time)/60.))
                 print()
@@ -316,6 +301,3 @@ with tf.Session(config=config, graph=graph) as session:
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     saver.save(session, dir_path+'\\models\\'+'tfTestModel'+'_'+str(epoch)+'epochs_'+str(current_time))
     print('Complete')
-
-# To-Do:
-# Fix validation/test accuracy
